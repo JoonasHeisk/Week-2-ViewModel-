@@ -1,20 +1,20 @@
 package com.example.viikkotehtava2.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import com.example.viikkotehtava2.domain.Task
-import com.example.viikkotehtava2.domain.mockTasks
-import java.time.LocalDate
+import com.example.viikkotehtava2.model.Task
+import com.example.viikkotehtava2.model.mockTasks
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class TaskViewModel : ViewModel() {
 
-    private val _allTasks = mutableStateListOf<Task>()
-    var tasks by mutableStateOf(listOf<Task>())
-        private set
+    private val _allTasks = mutableListOf<Task>()
 
+    private val _tasks = MutableStateFlow<List<Task>>(emptyList())
+    val tasks: StateFlow<List<Task>> = _tasks.asStateFlow()
+
+    // Sort ja filter tilat
     private var sortAscending = true
     private var filterDoneState: Boolean? = null
 
@@ -23,35 +23,49 @@ class TaskViewModel : ViewModel() {
         refreshTasks()
     }
 
+    // Lisää uusi tehtävä
     fun addTask(task: Task) {
         _allTasks.add(task)
         refreshTasks()
     }
 
+    // Toggle tehtävän valmis-tila
     fun toggleDone(id: Int) {
         val index = _allTasks.indexOfFirst { it.id == id }
         if (index >= 0) {
             val old = _allTasks[index]
             _allTasks[index] = old.copy(done = !old.done)
+            refreshTasks()
         }
-        refreshTasks()
     }
 
+    // Poista tehtävä
     fun removeTask(id: Int) {
         _allTasks.removeAll { it.id == id }
         refreshTasks()
     }
 
+    // Päivitä tehtävä
+    fun updateTask(updatedTask: Task) {
+        val index = _allTasks.indexOfFirst { it.id == updatedTask.id }
+        if (index >= 0) {
+            _allTasks[index] = updatedTask
+            refreshTasks()
+        }
+    }
+
+    // Vaihda sort järjestys
     fun sortByDueDate() {
         sortAscending = !sortAscending
         refreshTasks()
     }
 
+    // Filter by done
     fun filterByDoneToggle() {
         filterDoneState = when(filterDoneState) {
-            null -> true       // done
-            true -> false      // ei done
-            false -> null      // molemmat
+            null -> true      // näytä vain tehdyt
+            true -> false     // näytä vain tekemättömät
+            false -> null     // näytä kaikki
         }
         refreshTasks()
     }
@@ -62,13 +76,17 @@ class TaskViewModel : ViewModel() {
     }
 
     private fun refreshTasks() {
-        var updated = _allTasks.toList()
+        var updated = _allTasks.toList() // tee kopio
 
-        filterDoneState?.let { updated = updated.filter { it.done == filterDoneState } }
+        // Filter
+        filterDoneState?.let { state ->
+            updated = updated.filter { it.done == state }
+        }
 
+        // Sort
         updated = if (sortAscending) updated.sortedBy { it.dueDate }
         else updated.sortedByDescending { it.dueDate }
 
-        tasks = updated
+        _tasks.value = updated
     }
 }

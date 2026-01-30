@@ -1,29 +1,32 @@
-package com.example.viikkotehtava2.screens
+package com.example.viikkotehtava2.view
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.viikkotehtava2.domain.Task
+import com.example.viikkotehtava2.model.Task
 import com.example.viikkotehtava2.viewmodel.TaskViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
+
     var newTitle by remember { mutableStateOf("") }
     var newDescription by remember { mutableStateOf("") }
     var newPriority by remember { mutableStateOf(1) }
     var newDueDateText by remember { mutableStateOf("") }
+    var selectedTask by remember { mutableStateOf<Task?>(null) }
 
+    val tasks by taskViewModel.tasks.collectAsState()
     val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
     Column(
@@ -37,14 +40,14 @@ fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
             color = MaterialTheme.colorScheme.primary
         )
 
-
         Spacer(modifier = Modifier.height(16.dp))
 
+        // --- Lisää tehtävä ---
         Column {
             OutlinedTextField(
                 value = newTitle,
                 onValueChange = { newTitle = it },
-                placeholder = { Text("Otsikko", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("Otsikko") },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Default),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -55,7 +58,7 @@ fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
             OutlinedTextField(
                 value = newDescription,
                 onValueChange = { newDescription = it },
-                placeholder = { Text("Kuvaus", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("Kuvaus") },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Default),
                 singleLine = false,
                 modifier = Modifier
@@ -69,7 +72,7 @@ fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
                 OutlinedTextField(
                     value = newDueDateText,
                     onValueChange = { newDueDateText = it },
-                    placeholder = { Text("dd.MM.yyyy", style = MaterialTheme.typography.bodyMedium) },
+                    placeholder = { Text("dd.MM.yyyy") },
                     textStyle = MaterialTheme.typography.bodyMedium,
                     singleLine = true,
                     modifier = Modifier.width(120.dp)
@@ -86,7 +89,7 @@ fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
                         }
 
                         val newTask = Task(
-                            id = (taskViewModel.tasks.maxOfOrNull { it.id } ?: 0) + 1,
+                            id = (tasks.maxOfOrNull { it.id } ?: 0) + 1,
                             title = newTitle,
                             description = newDescription,
                             priority = newPriority,
@@ -107,32 +110,47 @@ fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // sort ja filter napit
+        // --- Sort / Filter napit ---
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Button(onClick = { taskViewModel.sortByDueDate() }) {
-                Text("Sort by Due Date")
+                Text("Suodata pvm")
             }
-
             Button(onClick = { taskViewModel.filterByDoneToggle() }) {
-                Text("Filter by Done")
+                Text("Suodata tehty")
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
+        // --- Tehtävälista ---
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(taskViewModel.tasks) { task ->
+            items(tasks) { task ->
                 TaskRow(
                     task = task,
                     onToggleDone = { taskViewModel.toggleDone(it) },
+                    onEdit = { selectedTask = it },
                     onRemove = { taskViewModel.removeTask(it) }
                 )
-                HorizontalDivider(color = Color.Gray, thickness = 1.dp)
+                Divider(color = Color.Gray, thickness = 1.dp)
             }
         }
+    }
+
+    // --- DetailScreen dialogi ---
+    selectedTask?.let { task ->
+        DetailScreen(
+            task = task,
+            onDismiss = { selectedTask = null },
+            onSave = { updatedTask ->
+                taskViewModel.updateTask(updatedTask)
+                selectedTask = null
+            },
+            onRemove = {
+                taskViewModel.removeTask(it.id)
+                selectedTask = null
+            }
+        )
     }
 }
 
@@ -140,6 +158,7 @@ fun HomeScreen(taskViewModel: TaskViewModel = viewModel()) {
 fun TaskRow(
     task: Task,
     onToggleDone: (Int) -> Unit,
+    onEdit: (Task) -> Unit,
     onRemove: (Int) -> Unit
 ) {
     val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -147,7 +166,8 @@ fun TaskRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(8.dp)
+            .clickable { onEdit(task) },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -180,8 +200,63 @@ fun TaskRow(
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun HomeScreenPreview() {
-    HomeScreen()
+fun DetailScreen(
+    task: Task,
+    onDismiss: () -> Unit,
+    onSave: (Task) -> Unit,
+    onRemove: (Task) -> Unit
+) {
+    var title by remember { mutableStateOf(task.title) }
+    var description by remember { mutableStateOf(task.description) }
+    val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    var dueDateText by remember { mutableStateOf(task.dueDate.format(formatter)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Muokkaa tehtävää") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Otsikko") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Kuvaus") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = dueDateText,
+                    onValueChange = { dueDateText = it },
+                    label = { Text("Suorituspäivä (dd.MM.yyyy)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val parsedDate = try {
+                    LocalDate.parse(dueDateText, formatter)
+                } catch (e: Exception) {
+                    task.dueDate
+                }
+                onSave(task.copy(title = title, description = description, dueDate = parsedDate))
+            }) {
+                Text("Tallenna")
+            }
+        },
+        dismissButton = {
+            Button(onClick = { onRemove(task) }) {
+                Text("Poista")
+            }
+        }
+    )
 }

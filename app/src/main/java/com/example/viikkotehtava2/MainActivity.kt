@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import com.example.viikkotehtava2.screens.HomeScreen
+import com.example.viikkotehtava2.view.HomeScreen
 
 class MainActivity : ComponentActivity() {
 

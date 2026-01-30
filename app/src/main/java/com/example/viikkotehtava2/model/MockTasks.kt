@@ -1,4 +1,4 @@
-package com.example.viikkotehtava2.domain
+package com.example.viikkotehtava2.model
 
 import java.time.LocalDate
 
